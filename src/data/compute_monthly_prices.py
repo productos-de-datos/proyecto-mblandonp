@@ -1,37 +1,86 @@
-def compute_monthly_prices():
-    """Compute los precios promedios mensuales.
+""" 
+Módulo para promediar precios mensuales. 
+------------------------------------------------------------------------------- 
+Del archivo data_lake/cleansed/precios-horarios.csv se transforma la columna fecha  
+en formato datetime, se extrae el año y mes y se genera por cada mes del año el precio  
+promedio mensual guardando el archivo en la ruta data_lake/business/precios-mensuales.csv 
+columnas del archivo data_lake/business/precios-mensuales.csv son: 
+ 
+    * fecha: fecha en formato YYYY-MM-DD 
+ 
+    * precio: precio promedio mensual de la electricidad en la bolsa nacional 
+ 
+"""
+import pandas as pd
 
-    Usando el archivo data_lake/cleansed/precios-horarios.csv, compute el prcio
-    promedio mensual. Las
-    columnas del archivo data_lake/business/precios-mensuales.csv son:
 
-    * fecha: fecha en formato YYYY-MM-DD
+def load_data(infile):
 
-    * precio: precio promedio mensual de la electricidad en la bolsa nacional
+    file = pd.read_csv(infile, index_col=None, header=0)
+
+    return file
 
 
+def average_monthly_price(file):
+    """
+    El presente caso de uso permite validar que la función computa el promedio
+    del precio mensual reacionado con la fecha máxima de cada mes
+    >>> list(average_monthly_price(pd.DataFrame({'fecha': ('2021-06-02', '2021-06-05', '2021-06-02', '2021-03-02'),'precio': (20, 40, 30, 80)})).precio)
+    [80.0, 30.0]
     """
 
-    import pandas as pd
-    import datetime 
+    file_copy = file.copy()
 
-    df=pd.read_csv('data_lake/cleansed/precios-horarios.csv', index_col=None, header=0)
-    df["fecha"] = pd.to_datetime(df["fecha"]) 
-    df['mes'] = df['fecha'].dt.month 
-    df['year'] = df['fecha'].dt.year
-    dfam = df[['year','mes','precio']]
-    dfm = dfam.groupby(['year','mes']).mean({'precio': 'precios'})
-    dfm.reset_index(inplace = True)
-    dfmax = df.groupby(['year','mes']).agg({'fecha': 'max'})
-    dfmax.reset_index(inplace = True)
-    dff = dfmax.merge(dfm, left_on=['year', 'mes'], right_on=['year', 'mes']) 
-    df = dff[['fecha','precio']]
-    df.to_csv("data_lake/business/precios-mensuales.csv", index=None, header=True)    
-    #raise NotImplementedError("Implementar esta función")
-#    return
+    file_copy["fecha"] = pd.to_datetime(file_copy["fecha"])
+
+    file_copy["month"] = file_copy["fecha"].dt.month
+    file_copy["year"] = file_copy["fecha"].dt.year
+
+    compute_month_prices = file_copy.groupby(["year", "month"]).mean(
+        {"precio": "precios"}
+    )
+    compute_month_prices.reset_index(inplace=True)
+
+    file_copy = file_copy.groupby(["year", "month"]).agg({"fecha": "max"})
+    file_copy.reset_index(inplace=True)
+
+    compute_month_prices = file_copy.merge(
+        compute_month_prices, left_on=["year", "month"], right_on=["year", "month"]
+    )
+    compute_month_prices = compute_month_prices[["fecha", "precio"]]
+
+    return compute_month_prices
+
+
+def save_data(compute_month_prices, outfile):
+    compute_month_prices.to_csv(outfile, index=None, header=True)
+
+
+def compute_monthly_prices():
+    try:
+        infile = "data_lake/cleansed/precios-horarios.csv"
+        outfile = "data_lake/business/precios-mensuales.csv"
+        file = load_data(infile)
+        compute_month_prices = average_monthly_price(file)
+        save_data(compute_month_prices, outfile)
+    except:
+        raise NotImplementedError("Implementar esta función")
+
+
+def test_values_compute_daily_prices():
+    df = pd.DataFrame(
+        {
+            "fecha": ("2021-06-02", "2021-06-05", "2021-06-02", "2021-03-02"),
+            "precio": (20, 40, 30, 80),
+        }
+    )
+    expect = [80.0, 30.0]
+    assert list(average_monthly_price(df).precio) == expect
+
 
 if __name__ == "__main__":
-    
+
     import doctest
+
     doctest.testmod()
     compute_monthly_prices()
